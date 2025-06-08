@@ -5,6 +5,7 @@ import * as admin from 'firebase-admin';
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import * as functions from 'firebase-functions';
+import { Joke, JokeList } from './joke';
 
 
 
@@ -16,13 +17,14 @@ if (admin.apps.length === 0) {
 }
 
 
-async function fetchJokeFromAzure(): Promise<any> {
-    const response = await axios.get("https://daily-dad-humor3.azurewebsites.net/api/JokeOfDay");
-    return response.data;
+async function fetchJokeFromAzure(): Promise<JokeList> {
+    const response = await axios.get("https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion");
+    return response.data as JokeList;
 }
 
-async function sendPushToTopic(joke: any, topic: string): Promise<void> {
-    logger.info(`Attempting to send joke to topic: ${topic}`, { jokeContent: joke.content || joke });
+async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void> {
+    
+    logger.info(`Attempting to send joke to topic: ${topic}`, { jokes: JSON.stringify(jokes) });
 
     const projectId = process.env.GCLOUD_PROJECT;
     if (!projectId) {
@@ -37,18 +39,44 @@ async function sendPushToTopic(joke: any, topic: string): Promise<void> {
     }
 
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+    // const hours24 = 86400;
+    // const minutes10 = 600;
+    //const ttl = hours24 - minutes10
 
+    //todo: remove
+    const ttl = 35;
+    
+    const apnsExpiration = getApnsExpiration(ttl);
+
+
+    const jokesData = jokes.length == 1 ? {      
+        joke1: removeUnsupportedChars(jokes[0].content) || "", 
+        author1:  removeUnsupportedChars(jokes[0].author || ''),
+        category1: jokes[0].category || ''
+    } : {      
+        joke1:  removeUnsupportedChars(jokes[0].content) || "", 
+        author1: removeUnsupportedChars(jokes[0].author || ''),
+        category1: jokes[0].category || '',
+        joke2: jokes[1].content || "", 
+        author2: jokes[1].author || '',
+        category2: jokes[1].category || ''
+    };
+        
     const message = {
         message: {
             topic: topic, // For HTTP v1, just the topic name, not /topics/
             notification: {
                 title: 'Your Daily Joke!',
-                body: 'Tap to reveal the punchline 😄'
+                body: 'Tap to reveal'
             },
-            data: {
-                joke: joke.content || String(joke), // Ensure joke is a string if content is missing
-                author: joke.author || '',
-                category: joke.category || ''
+            data: jokesData,
+            "android": {
+                "ttl": `${ttl}s`  // ✅ TTL for Android (24 hours)
+            },
+            "apns": {
+                "headers": {
+                    "apns-expiration": `${apnsExpiration}`  // ✅ UNIX timestamp (seconds)
+                }
             }
         }
     };
@@ -62,38 +90,56 @@ async function sendPushToTopic(joke: any, topic: string): Promise<void> {
     logger.info(`Successfully sent push notification to topic: ${topic}`);
 }
 
+function removeUnsupportedChars(text: string): string {
+  return text.normalize('NFKD').replace(/[^\x00-\x7F]/g, '');
+}
+
+function getApnsExpiration(ttlInSeconds: number): string {
+  const nowInSeconds = Math.floor(Date.now() / 1000);
+  return String(nowInSeconds + ttlInSeconds);
+}
 
 export const sendHourlyJoke = onSchedule("0 * * * *", async () => {
-    const hour = new Date().getHours();
-    const topic = `daily-dad-humor-joke-${String(hour).padStart(2, '0')}`;
-
     try {
-        const joke = await fetchJokeFromAzure();
-        await sendPushToTopic(joke, topic);
-        logger.info(`✅ Joke sent to topic ${topic}, joke: ${joke.content}`); // Using logger.info for consistency
+        const jokeList = await fetchJokeFromAzure();
+        await processJokeList(jokeList);
+        logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
     } catch (error) {
         logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
     }
 });
 
+async function processJokeList(jokeList: JokeList): Promise<void> {
+    const promises = new Array<Promise<void>>();
+    const hour = new Date().getHours();
+    const hourPart = String(hour).padStart(2, '0');
+
+    for (const topicInfo of jokeList.topics) {
+        const standardJoke = jokeList.standardJokes[topicInfo.stdJokeIndex];
+        const premiumJoke = jokeList.premiumJokes[topicInfo.premiumJokeIndex];
+        const stdTopicName = `${topicInfo.topicName}-${hourPart}-standard-t`;
+        const premTopicName = `${topicInfo.topicName}-${hourPart}-premium-t`;
+
+        promises.push(sendPushToTopic([standardJoke.joke], stdTopicName));
+        promises.push(sendPushToTopic([premiumJoke.joke, standardJoke.joke], premTopicName));        
+    }
+
+    await Promise.all(promises);
+}
 
 export const testJokePush = functions.https.onRequest((req, res) => {
     new Promise(async () => {
-        if (req.path === '/' || req.path === '/healthz') {            
+        if (req.path === '/' || req.path === '/healthz') {
             res.status(200).send('OK');
             return;
         }
         logger.info(`Http trigger test`);
-        const topic = req.query.topic || 'joke-test';
-
         try {
-            const joke = await fetchJokeFromAzure();
-            await sendPushToTopic(joke, String(topic));
-            res.status(200).send(`✅ Test joke sent to topic: ${topic}, joke: ${joke.content}`);
+            const jokeList = await fetchJokeFromAzure();
+            processJokeList(jokeList);
+            logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
         } catch (error) {
-            console.error('❌ Test push failed:', error);
-            res.status(500).send('Failed to send joke');
+            logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
         }
-    }
-    )
+    });
 });

@@ -13,7 +13,7 @@
 }
 
 !!! Co zjebane to samo musi byc w package.json i functions/package.json.
-!!! Wszystkie npm build odpala się w functions/.
+!!! Wszystkie npm run build odpala się w functions/.
 !!! Polecenia do deploymentu z project root.
 
 
@@ -21,6 +21,9 @@
 
 init:
 npx firebase-tools@12.9.1 init functions
+
+build:
+npm run build z katalogu functions
 
 deploy:
 npx firebase-tools@12.9.1 deploy --only functions
@@ -32,7 +35,7 @@ npx firebase-tools@12.9.1
 npx firebase-tools@12.9.1 emulators:start --only functions
 
 
-curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke-0?topic=joke-12"
+curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke-0"
 
 Wyjscie w logach
 
