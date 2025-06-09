@@ -53,4 +53,11 @@ https://console.firebase.google.com/u/0/project/daily-dad-humor-firebase/functio
 Firebase funcitons:
 https://console.firebase.google.com/u/0/project/daily-dad-humor-firebase/functions/list
 
+6. Troubleshooting
+
+- Wazne aby funkcje i aplikacja byly w tym samym projekcie.
+- Dla testow na konsoli googla
+  - pierwszym razem pojawia sie error 400, ale trzeba odpalic kilka razy to dziala
+  - wazne, zeby w message dla topicow byly same stringi, bez zagniezdzen
+
 

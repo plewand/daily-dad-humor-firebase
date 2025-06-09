@@ -1,16 +1,14 @@
 
-export class Joke {
-    category: string;
-    rowKey: string;
+export class Joke {    
+    jokeId: string;
     content: string;
     author?: string;
     rating?: number;
     ratingNum?: number;
     explanation?: string;
 
-    constructor(categoryName: string, rowKey: string, content: string, author?: string, rating?: number, ratingNum?: number, explanation?: string) {
-        this.category = categoryName;
-        this.rowKey = rowKey;
+    constructor(jokeId: string, content: string, author?: string, rating?: number, ratingNum?: number, explanation?: string) {
+        this.jokeId = jokeId;        
         this.content = content;
         this.author = author;
         this.rating = rating;

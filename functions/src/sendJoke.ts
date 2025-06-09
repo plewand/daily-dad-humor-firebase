@@ -8,12 +8,13 @@ import * as functions from 'firebase-functions';
 import { Joke, JokeList } from './joke';
 
 
-
 // Initialize Firebase Admin SDK.
 // In a Firebase Functions environment, initializeApp() can be called without arguments
 // to automatically discover the project configuration.
 if (admin.apps.length === 0) {
-    admin.initializeApp();
+    admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+    });
 }
 
 
@@ -23,8 +24,8 @@ async function fetchJokeFromAzure(): Promise<JokeList> {
 }
 
 async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void> {
-    
-    logger.info(`Attempting to send joke to topic: ${topic}`, { jokes: JSON.stringify(jokes) });
+
+    logger.info(`Attempting to send joke to topic: [${topic}]`, { jokes: JSON.stringify(jokes) });
 
     const projectId = process.env.GCLOUD_PROJECT;
     if (!projectId) {
@@ -44,24 +45,31 @@ async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void>
     //const ttl = hours24 - minutes10
 
     //todo: remove
-    const ttl = 35;
-    
+    const ttl = 60;
+
     const apnsExpiration = getApnsExpiration(ttl);
 
 
-    const jokesData = jokes.length == 1 ? {      
-        joke1: removeUnsupportedChars(jokes[0].content) || "", 
-        author1:  removeUnsupportedChars(jokes[0].author || ''),
-        category1: jokes[0].category || ''
-    } : {      
-        joke1:  removeUnsupportedChars(jokes[0].content) || "", 
+    const jokesData = jokes.length == 1 ? {
+        content1: removeUnsupportedChars(jokes[0].content) || "",
         author1: removeUnsupportedChars(jokes[0].author || ''),
-        category1: jokes[0].category || '',
-        joke2: jokes[1].content || "", 
+        jokeId1: jokes[0].jokeId || '',
+        explanation1: jokes[0].explanation || '',
+        rating1: `${jokes[0].rating || 0}`,
+    } : {
+        content1: removeUnsupportedChars(jokes[0].content) || "",
+        author1: removeUnsupportedChars(jokes[0].author || ''),
+        jokeId1: jokes[0].jokeId || '',
+        explanation1: jokes[0].explanation || '',
+        rating1: `${jokes[0].rating || 0}`,
+
+        content2: jokes[1].content || "",
         author2: jokes[1].author || '',
-        category2: jokes[1].category || ''
+        jokeId2: jokes[1].jokeId || '',
+        explanation2: jokes[1].explanation || '',
+        rating2: `${jokes[1].rating || 0}`,
     };
-        
+
     const message = {
         message: {
             topic: topic, // For HTTP v1, just the topic name, not /topics/
@@ -91,12 +99,12 @@ async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void>
 }
 
 function removeUnsupportedChars(text: string): string {
-  return text.normalize('NFKD').replace(/[^\x00-\x7F]/g, '');
+    return text.normalize('NFKD').replace(/[^\x00-\x7F]/g, '');
 }
 
 function getApnsExpiration(ttlInSeconds: number): string {
-  const nowInSeconds = Math.floor(Date.now() / 1000);
-  return String(nowInSeconds + ttlInSeconds);
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    return String(nowInSeconds + ttlInSeconds);
 }
 
 export const sendHourlyJoke = onSchedule("0 * * * *", async () => {
@@ -111,17 +119,18 @@ export const sendHourlyJoke = onSchedule("0 * * * *", async () => {
 
 async function processJokeList(jokeList: JokeList): Promise<void> {
     const promises = new Array<Promise<void>>();
-    const hour = new Date().getHours();
+    const now = new Date(Date.now() + 25_000); // add 25 seconds
+    const hour = now.getHours();
     const hourPart = String(hour).padStart(2, '0');
 
     for (const topicInfo of jokeList.topics) {
         const standardJoke = jokeList.standardJokes[topicInfo.stdJokeIndex];
         const premiumJoke = jokeList.premiumJokes[topicInfo.premiumJokeIndex];
-        const stdTopicName = `${topicInfo.topicName}-${hourPart}-standard-t`;
-        const premTopicName = `${topicInfo.topicName}-${hourPart}-premium-t`;
+        const stdTopicName = `${topicInfo.topicName}-${hourPart}-standard-test`;
+        const premTopicName = `${topicInfo.topicName}-${hourPart}-premium-test`;
 
         promises.push(sendPushToTopic([standardJoke.joke], stdTopicName));
-        promises.push(sendPushToTopic([premiumJoke.joke, standardJoke.joke], premTopicName));        
+        promises.push(sendPushToTopic([premiumJoke.joke, standardJoke.joke], premTopicName));
     }
 
     await Promise.all(promises);
