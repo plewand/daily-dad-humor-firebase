@@ -41,12 +41,12 @@ async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void>
     }
 
     const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-    // const hours24 = 86400;
-    // const minutes10 = 600;
-    //const ttl = hours24 - minutes10
+    const hours24 = 86400;
+    const minutes10 = 600;
+    const ttl = hours24 + minutes10
 
     //todo: remove
-    const ttl = 60;
+    //const ttl = 500;
 
     const apnsExpiration = getApnsExpiration(ttl);
 
