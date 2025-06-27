@@ -71,6 +71,12 @@ async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void>
         rating2: `${jokes[1].rating || 0}`,
     };
 
+    const payloadStr = JSON.stringify(jokesData);
+    const byteLength = Buffer.byteLength(payloadStr, 'utf8');
+
+    console.log(`Payload size: ${byteLength} bytes`);
+
+
     const message = {
         message: {
             topic: topic, // For HTTP v1, just the topic name, not /topics/
@@ -117,33 +123,6 @@ export const sendHourlyJoke = onSchedule("0 * * * *", async () => {
         logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
     }
 });
-
-// async function processJokeList(jokeList: JokeList): Promise<void> {
-//     const promises = new Array<Promise<void>>();
-//     const now = new Date(Date.now() + 25_000); // add 25 seconds
-//     const hour = now.getHours();
-//     const hourPart = String(hour).padStart(2, '0');
-
-//     const DELAY_MS = 1000;
-
-//     logger.info(`✅ Start sending`); // Using logger.info for consistency
-
-//     for (const topicInfo of jokeList.topics) {
-//         const standardJoke = jokeList.standardJokes[topicInfo.stdJokeIndex];
-//         const premiumJoke = jokeList.premiumJokes[topicInfo.premiumJokeIndex];
-//         const stdTopicName = `${topicInfo.topicName}-${hourPart}-standard-test`;
-//         const premTopicName = `${topicInfo.topicName}-${hourPart}-premium-test`;
-
-//         promises.push(sendPushToTopic([standardJoke.joke], stdTopicName));
-//         await delay(DELAY_MS);
-//         promises.push(sendPushToTopic([premiumJoke.joke, standardJoke.joke], premTopicName));
-//         await delay(DELAY_MS);
-//     }
-
-//     await Promise.all(promises);
-//     logger.info(`✅ End sending`); // Using logger.info for consistency
-// }
-
 
 
 async function processJokeList(jokeList: JokeList): Promise<void> {   
