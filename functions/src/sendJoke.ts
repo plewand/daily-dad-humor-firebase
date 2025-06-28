@@ -5,7 +5,7 @@ import * as admin from 'firebase-admin';
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import * as functions from 'firebase-functions';
-import { Joke, JokeList } from './joke';
+import { Joke } from './joke';
 
 
 // Initialize Firebase Admin SDK.
@@ -18,15 +18,20 @@ if (admin.apps.length === 0) {
 }
 
 
-async function fetchJokeFromAzure(): Promise<JokeList> {
-    const response = await axios.get("https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion");
-    return response.data as JokeList;
+async function fetchJokeFromAzure(dataSetId: number): Promise<Map<string, Joke[]>> {
+    //const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    logger.info(`dupa`);
+    logger.info(`data obtained ${JSON.stringify(response.data)}`);
+    const obj = response.data as Record<string, Joke[]>;
+    logger.info(`dupa1`);
+    return new Map<string, Joke[]>(Object.entries(obj));
 }
 
 async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void> {
 
     logger.info(`Attempting to send joke to topic: [${topic}]`, { jokes: JSON.stringify(jokes) });
-    
+
 
     const projectId = process.env.GCLOUD_PROJECT;
     if (!projectId) {
@@ -50,26 +55,16 @@ async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void>
 
     const apnsExpiration = getApnsExpiration(ttl);
 
+    const jokesData: Record<string, string> = {};
 
-    const jokesData = jokes.length == 1 ? {
-        content1: removeUnsupportedChars(jokes[0].content) || "",
-        author1: removeUnsupportedChars(jokes[0].author || ''),
-        jokeId1: jokes[0].jokeId || '',
-        explanation1: jokes[0].explanation || '',
-        rating1: `${jokes[0].rating || 0}`,
-    } : {
-        content1: removeUnsupportedChars(jokes[0].content) || "",
-        author1: removeUnsupportedChars(jokes[0].author || ''),
-        jokeId1: jokes[0].jokeId || '',
-        explanation1: jokes[0].explanation || '',
-        rating1: `${jokes[0].rating || 0}`,
-
-        content2: jokes[1].content || "",
-        author2: jokes[1].author || '',
-        jokeId2: jokes[1].jokeId || '',
-        explanation2: jokes[1].explanation || '',
-        rating2: `${jokes[1].rating || 0}`,
-    };
+    jokes.forEach((joke, index) => {
+        const i = index + 1; // To make keys like content1, content2, etc.
+        jokesData[`content${i}`] = removeUnsupportedChars(joke.content) || "";
+        jokesData[`author${i}`] = removeUnsupportedChars(joke.author || '');
+        jokesData[`jokeId${i}`] = joke.jokeId || '';
+        jokesData[`explanation${i}`] = joke.explanation || '';
+        jokesData[`rating${i}`] = `${joke.rating || 0}`;
+    });
 
     const payloadStr = JSON.stringify(jokesData);
     const byteLength = Buffer.byteLength(payloadStr, 'utf8');
@@ -114,41 +109,38 @@ function getApnsExpiration(ttlInSeconds: number): string {
     return String(nowInSeconds + ttlInSeconds);
 }
 
-export const sendHourlyJoke = onSchedule("0 * * * *", async () => {
-    try {
-        const jokeList = await fetchJokeFromAzure();
-        await processJokeList(jokeList);
+async function sendHourlyJoke(dataSetId: number) {
+ try {
+        const jokeList = await fetchJokeFromAzure(dataSetId);
+        await processJokeList(dataSetId, jokeList);
         logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
     } catch (error) {
         logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
     }
-});
+}
+
+export const sendHourlyJoke0 = onSchedule("0 * * * *", async () => sendHourlyJoke(0));
+export const sendHourlyJoke1 = onSchedule("0 * * * *", async () => sendHourlyJoke(1));
+export const sendHourlyJoke2 = onSchedule("0 * * * *", async () => sendHourlyJoke(2));
+export const sendHourlyJoke3 = onSchedule("0 * * * *", async () => sendHourlyJoke(3));
+export const sendHourlyJoke4 = onSchedule("0 * * * *", async () => sendHourlyJoke(4));
 
 
-async function processJokeList(jokeList: JokeList): Promise<void> {   
+async function processJokeList(dataSetId: number,jokeList: Map<string, Joke[]>): Promise<void> {
     const now = new Date(Date.now() + 25_000); // add 25 seconds
-    const hour = now.getHours();
+    const hour = now.getUTCHours();
     const hourPart = String(hour).padStart(2, '0');
 
     logger.info(`✅ Start sending`); // Using logger.info for consistency
 
-    for (const topicInfo of jokeList.topics) {
-        const standardJoke = jokeList.standardJokes[topicInfo.stdJokeIndex];
-        const premiumJoke = jokeList.premiumJokes[topicInfo.premiumJokeIndex];
-        const stdTopicName = `${topicInfo.topicName}-${hourPart}-standard-test`;
-        const premTopicName = `${topicInfo.topicName}-${hourPart}-premium-test`;
+    for (const [topicName, jokes] of jokeList.entries()) {
+        const topic = `${topicName}-${hourPart}-${dataSetId}-test`;
 
-        await sendPushToTopic([standardJoke.joke], stdTopicName);        
-        await sendPushToTopic([premiumJoke.joke, standardJoke.joke], premTopicName);
-        
+        await sendPushToTopic(jokes, topic);
     }
-    
+
     logger.info(`✅ End sending`); // Using logger.info for consistency
 }
-
-// function delay(ms: number): Promise<void> {
-//   return new Promise(resolve => setTimeout(resolve, ms));
-// }
 
 export const testJokePush = functions.https.onRequest((req, res) => {
     new Promise(async () => {
@@ -158,8 +150,8 @@ export const testJokePush = functions.https.onRequest((req, res) => {
         }
         logger.info(`Http trigger test`);
         try {
-            const jokeList = await fetchJokeFromAzure();
-            processJokeList(jokeList);
+            const jokeList = await fetchJokeFromAzure(0);
+            processJokeList(0, jokeList);
             logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
         } catch (error) {
             logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error

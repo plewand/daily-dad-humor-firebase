@@ -18,4 +18,4 @@
 //   response.send("Hello from Firebase!");
 // });
 
-export { testJokePush, sendHourlyJoke } from './sendJoke';
+export { testJokePush, sendHourlyJoke0, sendHourlyJoke1, sendHourlyJoke2, sendHourlyJoke3, sendHourlyJoke4 } from './sendJoke';
