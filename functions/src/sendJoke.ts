@@ -19,8 +19,8 @@ if (admin.apps.length === 0) {
 
 
 async function fetchJokeFromAzure(dataSetId: number): Promise<Map<string, Joke[]>> {
-    //const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
-    const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    //const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
     logger.info(`dupa`);
     logger.info(`data obtained ${JSON.stringify(response.data)}`);
     const obj = response.data as Record<string, Joke[]>;
