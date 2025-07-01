@@ -35,9 +35,9 @@ npx firebase-tools@12.9.1
 npx firebase-tools@12.9.1 emulators:start --only functions
 
 
-curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke-0"
+curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke0-0"
 
-npm run build && curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke-0"
+npm run build && curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke0-0"
 
 Wyjscie w logach
 

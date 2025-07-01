@@ -18,19 +18,32 @@ if (admin.apps.length === 0) {
 }
 
 
-async function fetchJokeFromAzure(dataSetId: number): Promise<Map<string, Joke[]>> {
-    const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
-    //const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
-    logger.info(`dupa`);
-    logger.info(`data obtained ${JSON.stringify(response.data)}`);
-    const obj = response.data as Record<string, Joke[]>;
-    logger.info(`dupa1`);
-    return new Map<string, Joke[]>(Object.entries(obj));
+type JokeSetResponse = {
+    jokes: Record<string, Joke[]>;
+    bestJokes: Joke[];
 }
 
-async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void> {
+class JokeSet {
+    jokes: Map<string, Joke[]>;
+    bestJokes: Joke[];
 
-    logger.info(`Attempting to send joke to topic: [${topic}]`, { jokes: JSON.stringify(jokes) });
+    constructor(jokes: Map<string, Joke[]>, bestJokes: Joke[]) {
+        this.jokes = jokes;
+        this.bestJokes = bestJokes;
+    }
+}
+
+async function fetchJokeFromAzure(dataSetId: number): Promise<JokeSet> {
+    //const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    // logger.info(`data obtained ${JSON.stringify(response.data)}`);
+    const obj = response.data as JokeSetResponse;
+    return new JokeSet(new Map<string, Joke[]>(Object.entries(obj.jokes)), obj.bestJokes);
+}
+
+async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string): Promise<void> {
+
+    logger.info(`Attempting to send joke to topic: [${topic}]`, { jokes: JSON.stringify(jokes), bestJokes: JSON.stringify(jokes) });
 
 
     const projectId = process.env.GCLOUD_PROJECT;
@@ -66,38 +79,109 @@ async function sendPushToTopic(jokes: Array<Joke>, topic: string): Promise<void>
         jokesData[`rating${i}`] = `${joke.rating || 0}`;
     });
 
+    const jokesDataWithBestJokes: Record<string, string> = {};
+
+    jokes.forEach((joke, index) => {
+        const i = index + 1; // To make keys like content1, content2, etc.
+        jokesDataWithBestJokes[`content${i}`] = removeUnsupportedChars(joke.content) || "";
+        jokesDataWithBestJokes[`author${i}`] = removeUnsupportedChars(joke.author || '');
+        jokesDataWithBestJokes[`jokeId${i}`] = joke.jokeId || '';
+        jokesDataWithBestJokes[`explanation${i}`] = joke.explanation || '';
+        jokesDataWithBestJokes[`rating${i}`] = `${joke.rating || 0}`;
+    });
+
+    bestJokes.forEach((joke, index) => {
+        const i = index + 1; // To make keys like content1, content2, etc.
+        jokesDataWithBestJokes[`b_content${i}`] = removeUnsupportedChars(joke.content) || "";
+        jokesDataWithBestJokes[`b_author${i}`] = removeUnsupportedChars(joke.author || '');
+        jokesDataWithBestJokes[`b_jokeId${i}`] = joke.jokeId || '';
+        jokesDataWithBestJokes[`b_explanation${i}`] = joke.explanation || '';
+        jokesDataWithBestJokes[`b_rating${i}`] = `${joke.rating || 0}`;
+    });
+
     const payloadStr = JSON.stringify(jokesData);
     const byteLength = Buffer.byteLength(payloadStr, 'utf8');
 
-    console.log(`Payload size: ${byteLength} bytes`);
+    const payloadWithBestJokesStr = JSON.stringify(jokesDataWithBestJokes);
+    const byteWithBestJokesLength = Buffer.byteLength(payloadWithBestJokesStr, 'utf8');
 
+    const dataThreshold = 4000;
+    const useLimited = byteWithBestJokesLength > dataThreshold;
+    const chosenSet = useLimited ? jokesData : jokesDataWithBestJokes;
 
-    const message = {
-        message: {
-            topic: topic, // For HTTP v1, just the topic name, not /topics/
-            notification: {
-                title: 'Your Daily Joke!',
-                body: 'Tap to reveal'
-            },
-            data: jokesData,
-            "android": {
-                "ttl": `${ttl}s`  // ✅ TTL for Android (24 hours)
-            },
-            "apns": {
-                "headers": {
-                    "apns-expiration": `${apnsExpiration}`  // ✅ UNIX timestamp (seconds)
+    //console.log(`data sent ${chosenSet}`);
+    console.log(`Payload size: ${byteLength} , with best jokes: ${byteWithBestJokesLength} bytes, best jokes included ${!useLimited}`);
+
+    //await sendMessage(topic, JSON.stringify(chosenSet), ttl, apnsExpiration, true, fcmEndpoint, accessToken);
+    //await sendMessage(topic, JSON.stringify(chosenSet), ttl, apnsExpiration, false, fcmEndpoint, accessToken);
+    //  const message = {
+    //     message: {
+    //         topic: topic, // For HTTP v1, just the topic name, not /topics/
+    //         notification: {
+    //             title: 'Your Daily Joke!',
+    //             body: 'Tap to reveal'
+    //         },
+    //         data: chosenSet,
+    //         "android": {
+    //             "ttl": `${ttl}s`  // ✅ TTL for Android (24 hours)
+    //         },
+    //         "apns": {
+    //             "headers": {
+    //                 "apns-expiration": `${apnsExpiration}`  // ✅ UNIX timestamp (seconds)
+    //             }
+    //         }
+    //     }
+    // };
+
+    // const soundAndroid = useSound ? 'default' : undefined;
+    // const soundIos = useSound ? 'default' : '';
+    
+    await sendMessage(true);
+    await sendMessage(false);
+
+    async function sendMessage(useSound: boolean) {
+        if (!useSound) {
+            topic = topic + "-silent";
+        }
+        const soundAndroid = useSound ? 'default' : undefined;
+        const soundIos = useSound ? 'default' : '';
+
+        const message = {
+            message: {
+                topic: topic, // For HTTP v1, just the topic name, not /topics/
+                notification: {
+                    title: 'Your Daily Joke!',
+                    body: 'Tap to reveal'
+                },
+                data: chosenSet,
+                android: {
+                    ttl: `${ttl}s`, // ✅ TTL for Android (24 hours)
+                    notification: {
+                        sound: soundAndroid // or omit this field
+                    }
+                },
+                apns: {
+                    headers: {
+                        "apns-expiration": `${apnsExpiration}` // ✅ UNIX timestamp (seconds)
+                    },
+                    payload: {
+                        aps: {
+                            sound: soundIos // 🔇 Empty string disables sound
+                        }
+                    }
                 }
             }
-        }
-    };
+        };
 
-    await axios.post(fcmEndpoint, message, {
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-        }
-    });
-    logger.info(`Successfully sent push notification to topic: ${topic}`);
+
+        await axios.post(fcmEndpoint, message, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        logger.info(`Successfully sent push notification to topic: ${topic}`);
+    }
 }
 
 function removeUnsupportedChars(text: string): string {
@@ -110,9 +194,9 @@ function getApnsExpiration(ttlInSeconds: number): string {
 }
 
 async function sendHourlyJoke(dataSetId: number) {
- try {
-        const jokeList = await fetchJokeFromAzure(dataSetId);
-        await processJokeList(dataSetId, jokeList);
+    try {
+        const jokeSet = await fetchJokeFromAzure(dataSetId);
+        await processJokeList(dataSetId, jokeSet);
         logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
     } catch (error) {
         logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
@@ -126,17 +210,17 @@ export const sendHourlyJoke3 = onSchedule("0 * * * *", async () => sendHourlyJok
 export const sendHourlyJoke4 = onSchedule("0 * * * *", async () => sendHourlyJoke(4));
 
 
-async function processJokeList(dataSetId: number,jokeList: Map<string, Joke[]>): Promise<void> {
+async function processJokeList(dataSetId: number, jokeSet: JokeSet): Promise<void> {
     const now = new Date(Date.now() + 25_000); // add 25 seconds
     const hour = now.getUTCHours();
     const hourPart = String(hour).padStart(2, '0');
 
     logger.info(`✅ Start sending`); // Using logger.info for consistency
 
-    for (const [topicName, jokes] of jokeList.entries()) {
+    for (const [topicName, jokes] of jokeSet.jokes.entries()) {
         const topic = `${topicName}-${hourPart}-${dataSetId}-test`;
 
-        await sendPushToTopic(jokes, topic);
+        await sendPushToTopic(jokes, jokeSet.bestJokes, topic);
     }
 
     logger.info(`✅ End sending`); // Using logger.info for consistency
@@ -150,8 +234,8 @@ export const testJokePush = functions.https.onRequest((req, res) => {
         }
         logger.info(`Http trigger test`);
         try {
-            const jokeList = await fetchJokeFromAzure(0);
-            processJokeList(0, jokeList);
+            const jokeSet = await fetchJokeFromAzure(0);
+            processJokeList(0, jokeSet);
             logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
         } catch (error) {
             logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
