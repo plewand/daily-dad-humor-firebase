@@ -33,7 +33,9 @@ npx firebase-tools@12.9.1
 
 4. Start emulatora:
 npx firebase-tools@12.9.1 emulators:start --only functions
+ 
 
+curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/testJokePush" -H "Content-Type: application/json" -d '{"hour": 2}'
 
 curl "http://localhost:5003/daily-dad-humor-firebase/us-central1/sendHourlyJoke0-0"
 

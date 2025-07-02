@@ -34,9 +34,9 @@ class JokeSet {
 }
 
 async function fetchJokeFromAzure(dataSetId: number): Promise<JokeSet> {
-    //const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
-    const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
-    // logger.info(`data obtained ${JSON.stringify(response.data)}`);
+    const response = await axios.get(`https://daily-dad-humor3.azurewebsites.net/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    //const response = await axios.get(`http://localhost:7071/api/JokesForNotificatiion?dataset=${dataSetId}`);
+    logger.info(`data obtained ${JSON.stringify(response.data)}`);
     const obj = response.data as JokeSetResponse;
     return new JokeSet(new Map<string, Joke[]>(Object.entries(obj.jokes)), obj.bestJokes);
 }
@@ -112,30 +112,6 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
     //console.log(`data sent ${chosenSet}`);
     console.log(`Payload size: ${byteLength} , with best jokes: ${byteWithBestJokesLength} bytes, best jokes included ${!useLimited}`);
 
-    //await sendMessage(topic, JSON.stringify(chosenSet), ttl, apnsExpiration, true, fcmEndpoint, accessToken);
-    //await sendMessage(topic, JSON.stringify(chosenSet), ttl, apnsExpiration, false, fcmEndpoint, accessToken);
-    //  const message = {
-    //     message: {
-    //         topic: topic, // For HTTP v1, just the topic name, not /topics/
-    //         notification: {
-    //             title: 'Your Daily Joke!',
-    //             body: 'Tap to reveal'
-    //         },
-    //         data: chosenSet,
-    //         "android": {
-    //             "ttl": `${ttl}s`  // ✅ TTL for Android (24 hours)
-    //         },
-    //         "apns": {
-    //             "headers": {
-    //                 "apns-expiration": `${apnsExpiration}`  // ✅ UNIX timestamp (seconds)
-    //             }
-    //         }
-    //     }
-    // };
-
-    // const soundAndroid = useSound ? 'default' : undefined;
-    // const soundIos = useSound ? 'default' : '';
-    
     await sendMessage(true);
     await sendMessage(false);
 
@@ -210,9 +186,9 @@ export const sendHourlyJoke3 = onSchedule("0 * * * *", async () => sendHourlyJok
 export const sendHourlyJoke4 = onSchedule("0 * * * *", async () => sendHourlyJoke(4));
 
 
-async function processJokeList(dataSetId: number, jokeSet: JokeSet): Promise<void> {
+async function processJokeList(dataSetId: number, jokeSet: JokeSet, customHour: number | undefined = undefined): Promise<void> {
     const now = new Date(Date.now() + 25_000); // add 25 seconds
-    const hour = now.getUTCHours();
+    const hour = customHour ? customHour : now.getUTCHours();
     const hourPart = String(hour).padStart(2, '0');
 
     logger.info(`✅ Start sending`); // Using logger.info for consistency
@@ -226,19 +202,24 @@ async function processJokeList(dataSetId: number, jokeSet: JokeSet): Promise<voi
     logger.info(`✅ End sending`); // Using logger.info for consistency
 }
 
-export const testJokePush = functions.https.onRequest((req, res) => {
-    new Promise(async () => {
+export const testJokePush = functions.https.onRequest(async (req, res) => {
+
+    logger.info(`Http trigger test`);
+
+    if (req.method == 'GET') {
         if (req.path === '/' || req.path === '/healthz') {
             res.status(200).send('OK');
             return;
         }
-        logger.info(`Http trigger test`);
-        try {
-            const jokeSet = await fetchJokeFromAzure(0);
-            processJokeList(0, jokeSet);
-            logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
-        } catch (error) {
-            logger.error('❌ Failed to fetch or send joke:', error); // Using logger.error
-        }
-    });
+    }
+    try {
+        const hour = req.body.hour
+        const jokeSet = await fetchJokeFromAzure(0);
+        await processJokeList(0, jokeSet, hour);
+        logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
+        res.status(200).send('Data processed sucessfully'); // <- Always respond, even on error
+    } catch (err) {
+        console.error('Error sending jokes:', err);
+        res.status(500).send('Internal server error'); // <- Always respond, even on error
+    }
 });
