@@ -121,6 +121,8 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
         }
         const soundAndroid = useSound ? 'default' : undefined;
         const soundIos = useSound ? 'default' : '';
+        const channel = useSound ? 'default_channel' : 'silent_channel';
+
 
         const message = {
             message: {
@@ -133,7 +135,8 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
                 android: {
                     ttl: `${ttl}s`, // ✅ TTL for Android (24 hours)
                     notification: {
-                        sound: soundAndroid // or omit this field
+                        sound: soundAndroid, // or omit this field
+                        channelId: channel
                     }
                 },
                 apns: {
@@ -216,7 +219,7 @@ export const testJokePush = functions.https.onRequest(async (req, res) => {
         const hour = req.body.hour;
         const dataSetId = req.body.dataset ? req.body.dataset : 0;
         const jokeSet = await fetchJokeFromAzure(dataSetId);
-        await processJokeList(0, jokeSet, hour);
+        await processJokeList(dataSetId, jokeSet, hour);
         logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
         res.status(200).send('Data processed sucessfully'); // <- Always respond, even on error
     } catch (err) {
