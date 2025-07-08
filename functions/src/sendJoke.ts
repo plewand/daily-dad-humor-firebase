@@ -136,7 +136,8 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
                     ttl: `${ttl}s`, // ✅ TTL for Android (24 hours)
                     notification: {
                         sound: soundAndroid, // or omit this field
-                        channelId: channel
+                        channelId: channel,
+                        click_action: "FLUTTER_NOTIFICATION_CLICK"
                     }
                 },
                 apns: {
