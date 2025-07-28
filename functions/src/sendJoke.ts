@@ -70,6 +70,8 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
 
     const jokesData: Record<string, string> = {};
 
+    jokesData[`ts`] = `${new Date()}`;
+
     jokes.forEach((joke, index) => {
         const i = index + 1; // To make keys like content1, content2, etc.
         jokesData[`content${i}`] = removeUnsupportedChars(joke.content) || "";
