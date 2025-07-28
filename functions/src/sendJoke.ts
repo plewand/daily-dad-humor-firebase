@@ -69,10 +69,13 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
     const apnsExpiration = getApnsExpiration(ttl);
 
     const jokesData: Record<string, string> = {};
+    const jokesDataWithBestJokes: Record<string, string> = {};
 
-    jokesData[`ts`] = `${new Date()}`;
+    const ts = "" + Date.now();
+    jokesData[`ts`] = ts;
+    jokesDataWithBestJokes[`ts`] = ts;
 
-    console.log(`Timestamp: ${jokesData[`ts`]}`);
+    console.log(`Timestamp: ${ts}`);
 
     jokes.forEach((joke, index) => {
         const i = index + 1; // To make keys like content1, content2, etc.
@@ -83,7 +86,6 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
         jokesData[`rating${i}`] = `${joke.rating || 0}`;
     });
 
-    const jokesDataWithBestJokes: Record<string, string> = {};
 
     jokes.forEach((joke, index) => {
         const i = index + 1; // To make keys like content1, content2, etc.
