@@ -61,7 +61,6 @@ https://console.firebase.google.com/u/0/project/daily-dad-humor-firebase/functio
 
 - Wazne aby funkcje i aplikacja byly w tym samym projekcie.
 - Dla testow na konsoli googla
-  - pierwszym razem pojawia sie error 400, ale trzeba odpalic kilka razy to dziala
   - wazne, zeby w message dla topicow byly same stringi, bez zagniezdzen
 
 - WYglada, ze nie mozna za duzo publikowac na raz wtedy 400. Z awaitem synchronicznie, lub delayem.

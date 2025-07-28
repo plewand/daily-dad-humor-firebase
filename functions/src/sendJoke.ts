@@ -136,6 +136,7 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
                 data: chosenSet,
                 android: {
                     ttl: `${ttl}s`, // ✅ TTL for Android (24 hours)
+                    priority: 'high',
                     notification: {
                         sound: soundAndroid, // or omit this field
                         channelId: channel,
