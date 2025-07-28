@@ -41,7 +41,7 @@ async function fetchJokeFromAzure(dataSetId: number): Promise<JokeSet> {
     return new JokeSet(new Map<string, Joke[]>(Object.entries(obj.jokes)), obj.bestJokes);
 }
 
-async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string): Promise<void> {
+async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string, customTimestamp: number | undefined): Promise<void> {
 
     logger.info(`Attempting to send joke to topic: [${topic}]`, { jokes: JSON.stringify(jokes), bestJokes: JSON.stringify(jokes) });
 
@@ -71,7 +71,8 @@ async function sendPushToTopic(jokes: Joke[], bestJokes: Joke[], topic: string):
     const jokesData: Record<string, string> = {};
     const jokesDataWithBestJokes: Record<string, string> = {};
 
-    const ts = "" + Date.now();
+    const ts = String(customTimestamp ?? Date.now());
+
     jokesData[`ts`] = ts;
     jokesDataWithBestJokes[`ts`] = ts;
 
@@ -197,7 +198,7 @@ export const sendHourlyJoke3 = onSchedule("0 * * * *", async () => sendHourlyJok
 export const sendHourlyJoke4 = onSchedule("0 * * * *", async () => sendHourlyJoke(4));
 
 
-async function processJokeList(dataSetId: number, jokeSet: JokeSet, customHour: number | undefined = undefined): Promise<void> {
+async function processJokeList(dataSetId: number, jokeSet: JokeSet, customHour: number | undefined = undefined, customTimestamp: number | undefined = undefined): Promise<void> {
     const now = new Date(Date.now() + 25_000); // add 25 seconds
     const hour = customHour ? customHour : now.getUTCHours();
     const hourPart = String(hour).padStart(2, '0');
@@ -207,7 +208,7 @@ async function processJokeList(dataSetId: number, jokeSet: JokeSet, customHour: 
     for (const [topicName, jokes] of jokeSet.jokes.entries()) {
         const topic = `${topicName}-${hourPart}-${dataSetId}-test`;
 
-        await sendPushToTopic(jokes, jokeSet.bestJokes, topic);
+        await sendPushToTopic(jokes, jokeSet.bestJokes, topic, customTimestamp);
     }
 
     logger.info(`✅ End sending`); // Using logger.info for consistency
