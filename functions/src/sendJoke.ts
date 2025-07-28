@@ -226,9 +226,11 @@ export const testJokePush = functions.https.onRequest(async (req, res) => {
     }
     try {
         const hour = req.body.hour;
-        const dataSetTimestamp = req.body.datasetts;
+        const dataSetTsOffset = req.body.datasetTsOffset ?? 0;
         const dataSetId = req.body.dataset ? req.body.dataset : 0;
         const jokeSet = await fetchJokeFromAzure(dataSetId);
+        const msInHour = 60 * 60 * 1000;
+        const dataSetTimestamp = Date.now() - msInHour * dataSetTsOffset;
         await processJokeList(dataSetId, jokeSet, hour, dataSetTimestamp);
         logger.info(`✅ Jokes sent to topics`); // Using logger.info for consistency
         res.status(200).send('Data processed sucessfully'); // <- Always respond, even on error
